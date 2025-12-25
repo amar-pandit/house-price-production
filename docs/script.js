@@ -35,7 +35,7 @@ async function runEngine() {
     };
 
     try {
-        const res = await fetch("https://house-price-api.onrender.com/predict", {
+        const res = await fetch("https://house-price-production.onrender.com/predict", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload)
