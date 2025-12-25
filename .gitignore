@@ -1,12 +1,12 @@
-# Python cache
+# Python cache files
 __pycache__/
 *.pyc
 *.pyo
 
-# Virtual env
+# Virtual environments
 .venv/
 env/
 
 # OS files
-.DS_Store
 Thumbs.db
+.DS_Store
