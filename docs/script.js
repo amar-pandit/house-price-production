@@ -1,8 +1,3 @@
-// ---------------- HELPERS ----------------
-const get = id => document.getElementById(id);
-const val = id => Number(get(id).value);
-
-// ---------------- MAIN ENGINE ----------------
 async function runEngine() {
     const sqft = val('sqft');
     if (sqft < 100) {
@@ -10,7 +5,6 @@ async function runEngine() {
         return;
     }
 
-    // Loader ON
     get('btnText').style.display = 'none';
     get('ldr').style.display = 'block';
     get('price').innerText = "⏳ Waking up server...";
@@ -22,76 +16,45 @@ async function runEngine() {
         location: "Tier-" + get('tier').value
     };
 
-    try {
-        const res = await fetch(
-            "https://house-price-production.onrender.com/predict",
-            {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload)
+    for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+            const res = await fetch(
+                "https://house-price-production.onrender.com/predict",
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                }
+            );
+
+            const data = await res.json();
+
+            if (!data || typeof data.predicted_price !== "number") {
+                throw new Error("Invalid response");
             }
-        );
 
-        if (!res.ok) {
-            throw new Error("API not ready");
+            const formatter = new Intl.NumberFormat('en-IN', {
+                style: 'currency',
+                currency: 'INR',
+                maximumFractionDigits: 0
+            });
+
+            get('price').innerText =
+                formatter.format(data.predicted_price);
+
+            updateAnalytics();
+            break; // success
+
+        } catch (err) {
+            console.warn(`Attempt ${attempt} failed`);
+            if (attempt === 2) {
+                get('price').innerText =
+                    "⚠️ Server waking up. Click again";
+            }
+            await new Promise(r => setTimeout(r, 8000));
         }
-
-        const data = await res.json();
-        console.log("Backend Response:", data);
-
-        // ✅ SAFE CHECK FIRST
-        if (!data || typeof data.predicted_price !== "number") {
-            get('price').innerText = "❌ Prediction Failed (Try again)";
-            return;
-        }
-
-        const formatter = new Intl.NumberFormat('en-IN', {
-            style: 'currency',
-            currency: 'INR',
-            maximumFractionDigits: 0
-        });
-
-        get('price').innerText =
-            formatter.format(data.predicted_price);
-
-        updateAnalytics();
-
-    } catch (err) {
-        console.error(err);
-        get('price').innerText =
-            "⚠️ Server sleeping. Click again in 5–10 sec";
     }
 
-    // Loader OFF
     get('btnText').style.display = 'block';
     get('ldr').style.display = 'none';
-}
-
-// ---------------- UI ANALYTICS ----------------
-function updateAnalytics() {
-    const tier = val('tier');
-    const year = val('year');
-    const age = new Date().getFullYear() - year;
-
-    const liq = tier > 12000 ? 94 : tier > 7000 ? 76 : 48;
-    const ret = Math.max(55, 100 - age * 2);
-    const gro = tier > 10000 ? 88 : 64;
-
-    updateBar('b-liq', 'v-liq', liq);
-    updateBar('b-ret', 'v-ret', ret);
-    updateBar('b-gro', 'v-gro', gro);
-
-    const insights = [
-        `AI model evaluated ${age} yrs old asset with ${ret}% value retention.`,
-        `Regional tier shows ${liq}% liquidity for faster resale.`,
-        `Market growth score at ${gro}% indicates stable appreciation.`
-    ];
-
-    get('insight').innerText =
-        insights[Math.floor(Math.random() * insights.length)];
-}
-
-function updateBar(bar, text, value) {
-    get(bar).style.width = value + '%';
-    get(text).innerText = value + '%';
 }
