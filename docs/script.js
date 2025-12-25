@@ -2,18 +2,6 @@
 const get = id => document.getElementById(id);
 const val = id => Number(get(id).value);
 
-// ---------------- SIDEBAR NAV ----------------
-function switchView(viewId) {
-    document.querySelectorAll('.view-content')
-        .forEach(v => v.classList.remove('active'));
-
-    document.querySelectorAll('.nav-item')
-        .forEach(i => i.classList.remove('active'));
-
-    get(viewId + '-view')?.classList.add('active');
-    event.currentTarget.classList.add('active');
-}
-
 // ---------------- MAIN ENGINE ----------------
 async function runEngine() {
     const sqft = val('sqft');
@@ -25,8 +13,8 @@ async function runEngine() {
     // Loader ON
     get('btnText').style.display = 'none';
     get('ldr').style.display = 'block';
+    get('price').innerText = "⏳ Waking up server...";
 
-    // ✅ PAYLOAD MATCHING BACKEND SCHEMA
     const payload = {
         area: sqft,
         bedrooms: val('beds'),
@@ -35,27 +23,27 @@ async function runEngine() {
     };
 
     try {
-        const res = await fetch("https://house-price-production.onrender.com/predict", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-        });
+        const res = await fetch(
+            "https://house-price-production.onrender.com/predict",
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            }
+        );
 
         if (!res.ok) {
-            get('price').innerText = "❌ API Error";
-            return;
+            throw new Error("API not ready");
         }
 
         const data = await res.json();
         console.log("Backend Response:", data);
 
-        const predicted = data.predicted_price;
-
-      if (!("predicted_price" in data)) {
-      console.error("Prediction failed:", data);
-     get('price').innerText = "❌ Prediction Failed";
-      return;
-         }
+        // ✅ SAFE CHECK FIRST
+        if (!data || typeof data.predicted_price !== "number") {
+            get('price').innerText = "❌ Prediction Failed (Try again)";
+            return;
+        }
 
         const formatter = new Intl.NumberFormat('en-IN', {
             style: 'currency',
@@ -63,12 +51,15 @@ async function runEngine() {
             maximumFractionDigits: 0
         });
 
-        get('price').innerText = formatter.format(Number(predicted));
+        get('price').innerText =
+            formatter.format(data.predicted_price);
+
         updateAnalytics();
 
     } catch (err) {
         console.error(err);
-        get('price').innerText = "❌ Backend Error";
+        get('price').innerText =
+            "⚠️ Server sleeping. Click again in 5–10 sec";
     }
 
     // Loader OFF
