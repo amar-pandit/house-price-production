@@ -14,7 +14,7 @@ function switchView(viewId) {
     event.currentTarget.classList.add('active');
 }
 
-// ---------------- MAIN ENGINE (STABLE + RETRY + TIMEOUT) ----------------
+// ---------------- MAIN ENGINE (FINAL STABLE VERSION) ----------------
 async function runEngine() {
     const sqft = val('sqft');
     if (sqft < 100) {
@@ -25,7 +25,7 @@ async function runEngine() {
     // Loader ON
     get('btnText').style.display = 'none';
     get('ldr').style.display = 'block';
-    get('price').innerText = "⏳ Waking up server...";
+    get('price').innerText = "⏳ Server warming up…";
 
     const payload = {
         area: sqft,
@@ -36,65 +36,62 @@ async function runEngine() {
 
     const API_URL = "https://house-price-production.onrender.com/predict";
 
-    // Try up to 3 times (Render free-tier cold start)
-    for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-            // ---- Timeout control (30s) ----
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 30000);
+    try {
+        // ---- Timeout control (45 sec for Render cold start) ----
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 45000);
 
-            const res = await fetch(API_URL, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
-                signal: controller.signal
-            });
+        const res = await fetch(API_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+            signal: controller.signal
+        });
 
-            clearTimeout(timeoutId);
+        clearTimeout(timeoutId);
 
-            if (!res.ok) {
-                throw new Error(`HTTP ${res.status}`);
-            }
-
-            // ---- Safe JSON parse (Render may return HTML while waking) ----
-            const text = await res.text();
-            let data;
-            try {
-                data = JSON.parse(text);
-            } catch {
-                throw new Error("Non-JSON response");
-            }
-
-            console.log("Backend Response:", data);
-
-            // ---- Final validation ----
-            if (typeof data.predicted_price !== "number") {
-                throw new Error("Prediction missing");
-            }
-
-            const formatter = new Intl.NumberFormat("en-IN", {
-                style: "currency",
-                currency: "INR",
-                maximumFractionDigits: 0
-            });
-
+        // If backend still waking up
+        if (!res.ok) {
             get('price').innerText =
-                formatter.format(data.predicted_price);
-
-            updateAnalytics();
-            break; // ✅ SUCCESS
-
-        } catch (err) {
-            console.warn(`Attempt ${attempt} failed`, err);
-
-            if (attempt === 3) {
-                get('price').innerText =
-                    "⚠️ Server warming up. Please wait 10–20 sec and click again";
-            }
-
-            // Wait before retry
-            await new Promise(r => setTimeout(r, 7000));
+                "⏳ Server waking up (free tier). Please wait 20–30 sec and click again.";
+            return;
         }
+
+        // Safe JSON parse
+        const text = await res.text();
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch {
+            get('price').innerText =
+                "⏳ Server warming up. Please click again.";
+            return;
+        }
+
+        console.log("Backend Response:", data);
+
+        // Final validation
+        if (typeof data.predicted_price !== "number") {
+            get('price').innerText =
+                "⏳ Server warming up. Please click again.";
+            return;
+        }
+
+        const formatter = new Intl.NumberFormat("en-IN", {
+            style: "currency",
+            currency: "INR",
+            maximumFractionDigits: 0
+        });
+
+        get('price').innerText =
+            formatter.format(data.predicted_price);
+
+        updateAnalytics();
+
+    } catch (err) {
+        console.warn("Fetch error:", err);
+        get('price').innerText =
+            "⏳ Server warming up. Please wait a few seconds and try again.";
     }
 
     // Loader OFF
